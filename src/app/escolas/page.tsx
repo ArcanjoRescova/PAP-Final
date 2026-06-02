@@ -1,13 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type ChangeEvent } from "react"
+import Image from "next/image"
 import {
   BookOpen,
   Building2,
+  Camera,
   ClipboardCheck,
   Plus,
   Search,
   Star,
+  X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -48,6 +51,7 @@ import {
   criarEscola,
   criarMatricula,
   criarAssiduidade,
+  atualizarAssiduidade,
   criarAvaliacao,
   contarEscolas,
   contarMatriculas,
@@ -56,6 +60,7 @@ import {
   type AvaliacaoComRelacoes,
 } from "@/services/escolaService"
 import { listarCriancas } from "@/services/criancaService"
+import { uploadFotoHorarioEscolar } from "@/services/storageService"
 import type { Escola, Crianca } from "@/types/database"
 
 export default function EscolasPage() {
@@ -102,6 +107,10 @@ export default function EscolasPage() {
     estado: "",
     justificacao: "",
   })
+  const [horarioPreview, setHorarioPreview] = useState<string | null>(null)
+  const [horarioFile, setHorarioFile] = useState<File | null>(null)
+  const [aGuardarAssiduidade, setAGuardarAssiduidade] = useState(false)
+  const horarioFileInputRef = useRef<HTMLInputElement>(null)
 
   const [novaAvaliacao, setNovaAvaliacao] = useState({
     crianca_id: "",
@@ -203,26 +212,62 @@ export default function EscolasPage() {
     }
   }
 
+  function limparHorarioEscolar() {
+    setHorarioFile(null)
+    setHorarioPreview(null)
+    if (horarioFileInputRef.current) {
+      horarioFileInputRef.current.value = ""
+    }
+  }
+
+  function resetFormAssiduidade() {
+    setNovaAssiduidade({
+      crianca_id: "",
+      data: "",
+      periodo: "",
+      estado: "",
+      justificacao: "",
+    })
+    limparHorarioEscolar()
+  }
+
+  function handleHorarioFotoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setHorarioFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setHorarioPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
   async function handleCriarAssiduidade() {
     try {
-      await criarAssiduidade({
+      setAGuardarAssiduidade(true)
+      const registo = await criarAssiduidade({
         crianca_id: novaAssiduidade.crianca_id,
         data: novaAssiduidade.data,
         periodo: novaAssiduidade.periodo || null,
         estado: novaAssiduidade.estado,
         justificacao: novaAssiduidade.justificacao || null,
+        horario_foto_url: null,
       })
+
+      if (horarioFile) {
+        const horarioUrl = await uploadFotoHorarioEscolar(registo.id, horarioFile)
+        await atualizarAssiduidade(registo.id, { horario_foto_url: horarioUrl })
+      }
+
       setDialogAssiduidadeOpen(false)
-      setNovaAssiduidade({
-        crianca_id: "",
-        data: "",
-        periodo: "",
-        estado: "",
-        justificacao: "",
-      })
+      resetFormAssiduidade()
       fetchData()
     } catch (error) {
       console.error("Erro ao criar assiduidade:", error)
+      alert("Erro ao guardar o registo. Verifique a ligação ao Supabase.")
+    } finally {
+      setAGuardarAssiduidade(false)
     }
   }
 
@@ -601,7 +646,13 @@ export default function EscolasPage() {
                 <CardTitle>Assiduidade</CardTitle>
                 <CardDescription>Registo de presenças e faltas</CardDescription>
               </div>
-              <Dialog open={dialogAssiduidadeOpen} onOpenChange={setDialogAssiduidadeOpen}>
+              <Dialog
+                open={dialogAssiduidadeOpen}
+                onOpenChange={(open) => {
+                  setDialogAssiduidadeOpen(open)
+                  if (!open) resetFormAssiduidade()
+                }}
+              >
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="mr-2 h-4 w-4" />
@@ -651,10 +702,71 @@ export default function EscolasPage() {
                       <Label>Justificação</Label>
                       <Input value={novaAssiduidade.justificacao} onChange={(e) => setNovaAssiduidade({ ...novaAssiduidade, justificacao: e.target.value })} placeholder="Motivo da falta (se aplicável)" />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Foto do horário escolar</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Carregue uma imagem do horário da criança (JPG, PNG, etc.)
+                      </p>
+                      <div className="flex items-start gap-4">
+                        <div className="relative shrink-0">
+                          {horarioPreview ? (
+                            <div className="relative">
+                              <Image
+                                src={horarioPreview}
+                                alt="Pré-visualização do horário"
+                                width={160}
+                                height={120}
+                                unoptimized
+                                className="h-28 w-40 rounded-lg border object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={limparHorarioEscolar}
+                                className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex h-28 w-40 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-xs text-muted-foreground">
+                              Sem imagem
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <input
+                            ref={horarioFileInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleHorarioFotoChange}
+                            className="hidden"
+                            id="horario-escolar-upload"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => horarioFileInputRef.current?.click()}
+                          >
+                            <Camera className="mr-2 h-4 w-4" />
+                            {horarioPreview ? "Alterar foto" : "Carregar foto"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setDialogAssiduidadeOpen(false)}>Cancelar</Button>
-                    <Button onClick={handleCriarAssiduidade} disabled={!novaAssiduidade.crianca_id || !novaAssiduidade.data || !novaAssiduidade.estado}>Guardar</Button>
+                    <Button
+                      onClick={handleCriarAssiduidade}
+                      disabled={
+                        aGuardarAssiduidade ||
+                        !novaAssiduidade.crianca_id ||
+                        !novaAssiduidade.data ||
+                        !novaAssiduidade.estado
+                      }
+                    >
+                      {aGuardarAssiduidade ? "A guardar..." : "Guardar"}
+                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -673,6 +785,7 @@ export default function EscolasPage() {
                       <TableHead>Período</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Justificação</TableHead>
+                      <TableHead>Horário</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -683,6 +796,20 @@ export default function EscolasPage() {
                         <TableCell>{a.periodo || "-"}</TableCell>
                         <TableCell><span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ${getEstadoBadgeClass(a.estado)}`}>{a.estado}</span></TableCell>
                         <TableCell className="max-w-xs truncate">{a.justificacao || "-"}</TableCell>
+                        <TableCell>
+                          {a.horario_foto_url ? (
+                            <a
+                              href={a.horario_foto_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-purple-600 hover:underline"
+                            >
+                              Ver horário
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

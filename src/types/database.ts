@@ -129,6 +129,7 @@ export interface EscolaAssiduidade {
   periodo: string | null
   estado: string
   justificacao: string | null
+  horario_foto_url: string | null
   created_at: string
 }
 

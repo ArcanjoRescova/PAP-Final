@@ -145,8 +145,12 @@ create table if not exists escola_assiduidade (
     periodo text,
     estado text not null,
     justificacao text,
+    horario_foto_url text,
     created_at timestamptz default now()
 );
+
+-- Se a tabela já existir, executar no Supabase SQL Editor:
+-- alter table escola_assiduidade add column if not exists horario_foto_url text;
 
 create table if not exists escola_avaliacao (
     id uuid primary key default gen_random_uuid(),
@@ -275,6 +279,26 @@ for update using (bucket_id = 'fotos-criancas');
 -- Política para permitir eliminar
 create policy "Permitir eliminar fotos" on storage.objects
 for delete using (bucket_id = 'fotos-criancas');
+
+-- ============================================
+-- STORAGE - FOTOS DOS HORÁRIOS ESCOLARES
+-- ============================================
+
+insert into storage.buckets (id, name, public)
+values ('horarios-escolares', 'horarios-escolares', true)
+on conflict (id) do nothing;
+
+create policy "Permitir upload de horarios" on storage.objects
+for insert with check (bucket_id = 'horarios-escolares');
+
+create policy "Permitir leitura de horarios" on storage.objects
+for select using (bucket_id = 'horarios-escolares');
+
+create policy "Permitir atualizar horarios" on storage.objects
+for update using (bucket_id = 'horarios-escolares');
+
+create policy "Permitir eliminar horarios" on storage.objects
+for delete using (bucket_id = 'horarios-escolares');
 
 -- ============================================
 -- AUTENTICAÇÃO - CRIAR UTILIZADOR ADMIN

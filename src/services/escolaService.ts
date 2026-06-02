@@ -217,6 +217,21 @@ export async function criarAssiduidade(
   return data
 }
 
+export async function atualizarAssiduidade(
+  id: string,
+  assiduidade: Partial<Omit<EscolaAssiduidade, "id" | "created_at">>
+): Promise<EscolaAssiduidade> {
+  const { data, error } = await supabase
+    .from("escola_assiduidade")
+    .update(assiduidade)
+    .eq("id", id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
 export async function removerAssiduidade(id: string): Promise<void> {
   const { error } = await supabase.from("escola_assiduidade").delete().eq("id", id)
   if (error) throw error
