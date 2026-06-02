@@ -1,0 +1,116 @@
+create extension if not exists "pgcrypto";
+
+-- ======================
+-- TABELA PRINCIPAL: CRIANÇA
+-- ======================
+create table if not exists crianca (
+    id uuid primary key default gen_random_uuid(),
+    nome_completo text not null,
+    data_nascimento date not null,
+    sexo text,
+    numero_processo text,
+    nif text,
+    data_entrada date,
+    data_saida date,
+    estado text default 'Ativa', -- Ativa, Desligada, Transferida, etc.
+    observacoes text,
+    created_at timestamptz default now()
+);
+
+-- ======================
+-- SAÚDE
+-- ======================
+create table if not exists medico (
+    id uuid primary key default gen_random_uuid(),
+    nome text not null,
+    especialidade text,
+    telefone text,
+    email text,
+    credenciais text,       -- nº ordem, CRM, etc.
+    observacoes text,
+    created_at timestamptz default now()
+);
+
+create table if not exists saude_registo (
+    id uuid primary key default gen_random_uuid(),
+    crianca_id uuid not null references crianca(id) on delete cascade,
+    data_registo timestamptz not null default now(),
+    tipo_registo text,           -- consulta de rotina, emergência, exame, etc.
+    descricao text,
+    peso_kg numeric(5,2),
+    altura_cm numeric(5,2),
+    pressao_arterial text,
+    medico_id uuid references medico(id),
+    observacoes text,
+    created_at timestamptz default now()
+);
+
+create table if not exists saude_agendamento (
+    id uuid primary key default gen_random_uuid(),
+    crianca_id uuid not null references crianca(id) on delete cascade,
+    tipo text not null,          -- consulta, exame, vacina
+    descricao text,
+    data_hora timestamptz not null,
+    local text,
+    medico_id uuid references medico(id),
+    estado text default 'Agendado', -- Agendado, Realizado, Cancelado, Faltou
+    observacoes text,
+    created_at timestamptz default now()
+);
+
+create table if not exists crianca_medicacao (
+    id uuid primary key default gen_random_uuid(),
+    crianca_id uuid not null references crianca(id) on delete cascade,
+    nome_medicacao text not null,
+    dosagem text,                 -- ex: 5ml, 1 comprimido
+    frequencia text,              -- ex: 2x ao dia
+    via_administracao text,       -- oral, injetável, etc.
+    data_inicio date,
+    data_fim date,
+    prescrito_por_medico_id uuid references medico(id),
+    observacoes text,
+    created_at timestamptz default now()
+);
+
+-- ======================
+-- ATIVIDADES EXTRACURRICULARES
+-- ======================
+create table if not exists atividade (
+    id uuid primary key default gen_random_uuid(),
+    nome text not null,  -- futebol, música, etc.
+    descricao text,
+    created_at timestamptz default now()
+);
+
+create table if not exists atividade_participacao (
+    id uuid primary key default gen_random_uuid(),
+    crianca_id uuid not null references crianca(id) on delete cascade,
+    atividade_id uuid not null references atividade(id),
+    ano_letivo text,            -- ex: 2025/2026
+    local text,
+    data_inicio date,
+    data_fim date,
+    motivo text,                -- porquê / objetivo
+    professor_responsavel text,
+    observacoes text,
+    created_at timestamptz default now()
+);
+
+-- ======================
+-- ESCOLA
+-- ======================
+create table if not exists escola (
+    id uuid primary key default gen_random_uuid(),
+    nome text not null,
+    morada text,
+    telefone text,
+    email text,
+    observacoes text,
+    created_at timestamptz default now()
+);
+
+create table if not exists escola_matricula (
+    id uuid primary key default gen_random_uuid(),
+    crianca_id uuid not null references crianca(id) on delete cascade,
+    escola_id uuid not null references escola(id),
+    ano_letivo text not null,
